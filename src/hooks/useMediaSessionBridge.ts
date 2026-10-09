@@ -121,6 +121,17 @@ export const useMediaSessionBridge = ({
             return;
         }
 
+        // —— iApp 播放通知上报：切歌时把歌名发给 iApp 弹系统通知（非 iApp 环境自动跳过）——
+        try {
+            const iappAny = (window as any).iapp;
+            if (iappAny && typeof iappAny.fn === 'function') {
+                const songName = String(currentSong.name || '').replace(/["\\]/g, '');
+                if (songName) iappAny.fn(`notify.play("${songName}")`);
+            }
+        } catch (e) {
+            console.warn('[iApp] notify report failed', e);
+        }
+
         // The displayed track's own deck, so the position published below belongs to the title
         // published beside it. Falls back to the active deck whenever no blend is holding a picture.
         const audio = getDisplayAudioElement?.() ?? audioRef.current;
