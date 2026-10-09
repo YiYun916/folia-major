@@ -12,15 +12,6 @@ import {
 // Bridges Folia playback state to the browser Media Session API.
 type UseMediaSessionBridgeOptions = {
     audioRef: RefObject<HTMLAudioElement | null>;
-    /**
-     * The deck the displayed track is playing on, or null when the picture is live.
-     *
-     * Metadata, clock and source have to describe the same deck. `currentSong` is already the
-     * DISPLAYED track - the outgoing one for the length of a blend - while `audioRef` names the
-     * active deck, which by then is the arriving track. Publishing the two together put the outgoing
-     * track's title on the incoming track's duration and position, so the system panel showed one
-     * song's name over another song's progress. `audioSrc` is passed to match this element.
-     */
     getDisplayAudioElement?: () => HTMLAudioElement | null;
     audioSrc: string | null;
     currentSong: SongResult | null;
@@ -71,7 +62,6 @@ export const useMediaSessionBridge = ({
             if (isNowPlayingControlDisabledRef.current || !audioRef.current) {
                 return;
             }
-
             try {
                 await mediaSessionPlayRef.current();
             } catch (e) {
@@ -82,7 +72,6 @@ export const useMediaSessionBridge = ({
             if (isNowPlayingControlDisabledRef.current || !audioRef.current) {
                 return;
             }
-
             mediaSessionPauseRef.current();
         });
         setActionHandlerSafely('previoustrack', () => {
@@ -106,6 +95,7 @@ export const useMediaSessionBridge = ({
         };
     }, [audioRef, isNowPlayingControlDisabledRef, mediaSessionNextRef, mediaSessionPauseRef, mediaSessionPlayRef, mediaSessionPrevRef]);
 
+    // —— iApp 通知栏：上报播放状态给 iApp 弹媒体通知栏（复用声屿 NotificationHelper）——
     useEffect(() => {
         if (!('mediaSession' in navigator)) {
             return;
@@ -121,23 +111,39 @@ export const useMediaSessionBridge = ({
             return;
         }
 
-        // —— iApp 播放通知上报：切歌时把歌名发给 iApp 弹系统通知（非 iApp 环境自动跳过）——
-        try {
-            const iappAny = (window as any).iapp;
-            if (iappAny && typeof iappAny.fn === 'function') {
-                const songName = String(currentSong.name || '').replace(/["\\]/g, '');
-                if (songName) iappAny.fn(`notify.play("${songName}")`);
+        const reportToIApp = (a: HTMLAudioElement | null) => {
+            try {
+                const iappAny = (window as any).iapp;
+                if (!iappAny || typeof iappAny.fn !== 'function') return;
+                const title = String(currentSong.name || '');
+                const artist = String(getSongArtistLabel(currentSong) || unknownArtistLabel || '');
+                const pos = Math.floor((a && a.currentTime) || 0);
+                const dur = Math.floor((a && a.duration && isFinite(a.duration)) ? a.duration : 0);
+                const playing = playerState === PlayerState.PLAYING;
+                const key = title + '|' + artist + '|' + pos + '|' + dur + '|' + playing;
+                if ((window as any)._iappNotifLast === key) return;
+                (window as any)._iappNotifLast = key;
+                const esc = (x: string) => String(x || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                iappAny.fn(`sy.notify("${esc(title)}","${esc(artist)}",${pos},${dur},${playing})`);
+            } catch (e) {
+                console.warn('[iApp] notify report failed', e);
             }
-        } catch (e) {
-            console.warn('[iApp] notify report failed', e);
-        }
+        };
 
-        // The displayed track's own deck, so the position published below belongs to the title
-        // published beside it. Falls back to the active deck whenever no blend is holding a picture.
         const audio = getDisplayAudioElement?.() ?? audioRef.current;
         if (!audio || !audioSrc) {
             return;
         }
+
+        reportToIApp(audio);
+        let lastPush = 0;
+        const onTime = () => {
+            const now = Date.now();
+            if (now - lastPush < 5000) return;
+            lastPush = now;
+            reportToIApp(audio);
+        };
+        audio.addEventListener('timeupdate', onTime);
 
         let disposed = false;
         const sourceArtworkUrl = cachedCoverUrl || getSongCoverUrl(currentSong) || '';
@@ -147,7 +153,6 @@ export const useMediaSessionBridge = ({
             if (disposed || !isMediaSessionSourceReady(audio, audioSrc, document.baseURI)) {
                 return;
             }
-
             try {
                 publishMediaSessionTrack(navigator.mediaSession, audio, {
                     title: currentSong.name,
@@ -160,11 +165,8 @@ export const useMediaSessionBridge = ({
             }
         };
 
-        // MediaMetadata rejects Electron's custom protocol, so expose that image through a
-        // short-lived blob URL while this track owns the platform media session.
         const prepareUnsupportedArtwork = async () => {
             if (!sourceArtworkUrl || artworkUrl) return;
-
             try {
                 const response = await fetch(sourceArtworkUrl);
                 if (!response.ok) throw new Error(`Artwork request failed: ${response.status}`);
@@ -172,7 +174,6 @@ export const useMediaSessionBridge = ({
                 if (artworkBlob.size <= 0 || !artworkBlob.type.startsWith('image/')) {
                     throw new Error('Artwork response is not a valid image');
                 }
-
                 const objectUrl = URL.createObjectURL(artworkBlob);
                 if (disposed) {
                     URL.revokeObjectURL(objectUrl);
@@ -188,7 +189,6 @@ export const useMediaSessionBridge = ({
 
         audio.addEventListener('loadedmetadata', publish);
         audio.addEventListener('durationchange', publish);
-        // Re-publish after playback starts in case Chromium delivered a late clear from the old source.
         audio.addEventListener('playing', publish);
         publish();
         void prepareUnsupportedArtwork();
@@ -198,15 +198,37 @@ export const useMediaSessionBridge = ({
             audio.removeEventListener('loadedmetadata', publish);
             audio.removeEventListener('durationchange', publish);
             audio.removeEventListener('playing', publish);
+            audio.removeEventListener('timeupdate', onTime);
             if (disposableArtworkUrl) URL.revokeObjectURL(disposableArtworkUrl);
         };
-    }, [audioRef, audioSrc, cachedCoverUrl, currentSong, getDisplayAudioElement, unknownArtistLabel]);
+    }, [audioRef, audioSrc, cachedCoverUrl, currentSong, getDisplayAudioElement, unknownArtistLabel, playerState]);
+
+    // —— iApp 通知栏：响应通知栏按钮（上一首/播放/下一首）——
+    useEffect(() => {
+        const w = window as any;
+        w.shengyuCmd = (cmd: string) => {
+            try {
+                if (cmd === 'prev') {
+                    mediaSessionPrevRef.current?.();
+                } else if (cmd === 'next') {
+                    mediaSessionNextRef.current?.();
+                } else if (cmd === 'toggle') {
+                    if (playerState === PlayerState.PLAYING) {
+                        mediaSessionPauseRef.current?.();
+                    } else {
+                        mediaSessionPlayRef.current?.();
+                    }
+                }
+            } catch (e) {
+                console.warn('[iApp] shengyuCmd failed', e);
+            }
+        };
+    }, [mediaSessionPrevRef, mediaSessionNextRef, mediaSessionPlayRef, mediaSessionPauseRef, playerState]);
 
     useEffect(() => {
         if (!('mediaSession' in navigator)) {
             return;
         }
-
         try {
             navigator.mediaSession.playbackState = isNowPlayingStageActive
                 ? 'none'
