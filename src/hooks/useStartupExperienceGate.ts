@@ -11,12 +11,7 @@ export type StartupExperienceStep = 'release-notes' | 'playback-entry-view' | 'p
 
 type StartupExperienceState = {
     isCurrentRelease: boolean;
-    /** Ponder onboarding was completed in some version (it is shown once per install). */
     hasSeenPonder: boolean;
-    /**
-     * Ponder onboarding was completed in this version. It is the last startup step and nothing else opens it,
-     * so this means the whole sequence already ran for this release.
-     */
     hasFinishedThisRelease: boolean;
     hasSeenReleaseNotes: boolean;
     isReleaseNotesOpen: boolean;
@@ -25,7 +20,6 @@ type StartupExperienceState = {
     isPonderOnboardingOpen: boolean;
 };
 
-/** Chooses the next blocking surface while ensuring that two startup dialogs never overlap. */
 export const resolveStartupExperienceStep = ({
     isCurrentRelease,
     hasSeenPonder,
@@ -39,8 +33,6 @@ export const resolveStartupExperienceStep = ({
     if (!isCurrentRelease || hasFinishedThisRelease || isReleaseNotesOpen || isPlaybackEntryViewPromptOpen || isPonderOnboardingOpen) {
         return null;
     }
-    // Release notes are per version; the playback choice and the Ponder gate are once per install,
-    // so having finished Ponder must not suppress a later release's notes.
     if (!hasSeenReleaseNotes) {
         return 'release-notes';
     }
@@ -56,7 +48,6 @@ const readLastSeenReleaseNotesVersion = (): string | null => (
         : localStorage.getItem(LAST_SEEN_RELEASE_NOTES_VERSION_STORAGE_KEY)
 );
 
-/** Runs the first-launch sequence: release notes, playback destination, then the Ponder shortcut gate. */
 export const useStartupExperienceGate = () => {
     const lastSeenPonderVersion = useSettingsModalStore(state => state.lastSeenGuideVersion);
     const isPonderOnboardingOpen = useSettingsModalStore(state => state.isUserGuideModalOpen);
@@ -68,7 +59,7 @@ export const useStartupExperienceGate = () => {
     const appVersion = typeof __APP_VERSION__ === 'undefined' ? null : __APP_VERSION__;
 
     const nextStep = resolveStartupExperienceStep({
-        isCurrentRelease: Boolean(appVersion && USER_GUIDE_AUTO_OPEN_VERSION === appVersion),
+        isCurrentRelease: false, // 禁用启动弹窗：版本更新、播放入口引导都不弹
         hasSeenPonder: lastSeenPonderVersion !== null,
         hasFinishedThisRelease: Boolean(appVersion && lastSeenPonderVersion === appVersion),
         hasSeenReleaseNotes: Boolean(appVersion && lastSeenReleaseNotesVersion === appVersion),
