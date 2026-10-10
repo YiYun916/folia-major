@@ -328,7 +328,7 @@ export const Grid3D: React.FC<Grid3DProps> = (props) => {
                     {/* Left title and settings */}
                     <div className="flex items-center justify-start order-1 md:order-none">
                         <h1 className="text-2xl font-bold tracking-tight opacity-90 flex items-center gap-3">
-                            Folia
+                            声屿Folia
                         </h1>
                         <button
                             onClick={() => onOpenSettings?.('help')}
