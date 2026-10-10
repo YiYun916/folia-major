@@ -3,12 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Megaphone, X } from 'lucide-react';
 
 /* ============================================================
- * 声屿 Folia 公告弹窗（风格对齐 Folia 自带弹窗：深色 zinc 卡片 + 毛玻璃 + 圆角 + 动画）
+ * Folia 公告弹窗（风格对齐 Folia 自带弹窗：深色 zinc 卡片 + 毛玻璃 + 圆角 + 动画）
  *
- * ① 改内容：改下面的 NOTICE_TITLE / NOTICE_BODY
+ * ① 改内容：直接改下面的 NOTICE_TITLE / NOTICE_BODY
  * ② 改时机：SHOW_EVERY_LOAD
  *    - true  = 每次打开都弹
- *    - false = 每个版本只弹一次（用 localStorage 记住）
+ *    - false = 每个版本只弹一次（用 localStorage 记住，和官方版本号机制一致）
  * ============================================================ */
 const NOTICE_TITLE = '声屿 Folia';
 const NOTICE_BODY = `声屿 Folia 由 GitHub 开源项目 Folia（原作者 chthollyphile，仓库 folia-major）二次开发而来，感谢原作者的无私开源。
@@ -16,7 +16,7 @@ const NOTICE_BODY = `声屿 Folia 由 GitHub 开源项目 Folia（原作者 chth
 Folia 是一个动态歌词播放器：支持网易云、酷狗、QQ 音乐等多平台曲库，歌词随节奏实时滚动，还能用 AI 自动生成配合封面的主题配色；界面简洁、深浅色自适配，网页和手机都能流畅使用。
 
 声屿在原版基础上做了本地化与体验优化，希望能陪你把每一首歌都听得更舒服。`;
-const SHOW_EVERY_LOAD = true; // true=每次打开都弹；false=每个版本只弹一次
+const SHOW_EVERY_LOAD = true;
 const NOTICE_STORAGE_KEY = 'folia_notice_seen_version';
 
 const FoliaNoticeModal: React.FC = () => {
@@ -86,6 +86,15 @@ const FoliaNoticeModal: React.FC = () => {
                             </p>
                         </div>
 
+                        <a
+                            href="https://qm.qq.com/q/M4bHIqkqUa"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full mb-3 py-3 px-6 rounded-full font-medium text-sm transition-colors bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center gap-2"
+                        >
+                            加入QQ交流群
+                        </a>
+
                         <button
                             onClick={close}
                             className="w-full py-3 px-6 rounded-full font-medium text-sm transition-colors bg-white/10 hover:bg-white/20 border border-white/10 text-white"
@@ -100,4 +109,3 @@ const FoliaNoticeModal: React.FC = () => {
 };
 
 export default FoliaNoticeModal;
-
