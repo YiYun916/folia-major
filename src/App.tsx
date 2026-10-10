@@ -23,6 +23,7 @@ import PonderHost from './components/ponder/PonderHost';
 const AutomixTransitionAnimation = lazy(() => import('./components/app/overlays/AutomixTransitionAnimation'));
 const Lattice = lazy(() => import('./components/app/lattice/Lattice'));
 import { UserGuideModal } from './components/modal/UserGuideModal';
+import FoliaNoticeModal from './components/modal/FoliaNoticeModal';
 import ReleaseNotesDialog from './components/modal/ReleaseNotesDialog';
 import { PlaybackEntryViewPrompt } from './components/modal/playback-entry-view/PlaybackEntryViewPrompt';
 import { LatticeFmNotice } from './components/modal/playback-entry-view/LatticeFmNotice';
@@ -2817,6 +2818,7 @@ export default function App() {
             <UserGuideModal theme={theme} />
             <PlaybackEntryViewPrompt theme={theme} />
             <LatticeFmNotice />
+            <FoliaNoticeModal />
         </AppShell>
     );
 }
