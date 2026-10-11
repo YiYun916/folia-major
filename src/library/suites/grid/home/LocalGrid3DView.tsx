@@ -13,6 +13,7 @@ import type { LibraryDeclaredActions } from '../../../core/contracts/suite';
 import type { LocalHomeRow, LocalHomeSectionKey } from '../../../core/model/localHomeModel';
 import { resolveLocalHomeActions } from '../../../core/model/localHomeModel';
 import { useLibraryHomeLocal, useLocalDirectoryTrees, useLocalHomeBatchConfig } from '../../../core/bindings/useLibraryHomeLocal';
+import { getLocalLibraryAvailability } from '../../../../services/localLibraryAvailability';
 import { useLibraryHomeActions } from '../../../core/bindings/useLibraryHomeActions';
 import { useLibraryHomeListRegistration } from '../../../core/bindings/useLibraryHomeSurfaceRegistration';
 
@@ -92,6 +93,9 @@ export const LocalGrid3DView: React.FC<LocalGrid3DViewProps> = ({
     isInteractive = true,
 }) => {
     const { t } = useTranslation();
+    // 本地文件系统访问(showDirectoryPicker 等)只有桌面浏览器/Electron 支持，手机 WebView 没有，
+    // 这种情况下隐藏"导入文件夹"入口，避免点了没反应。
+    const localImportSupported = getLocalLibraryAvailability().supported;
     const playlistFileInputRef = useRef<HTMLInputElement>(null);
     const directoryTrees = useLocalDirectoryTrees(directoryTreesResource, localSongs);
     const local = useLibraryHomeLocal({ localSongs, localPlaylists, catalog: localLibraryCatalog, activeRow });
@@ -137,14 +141,16 @@ export const LocalGrid3DView: React.FC<LocalGrid3DViewProps> = ({
     };
 
     const localActions = resolveLocalHomeActions(actionState);
-    const actions: DesktopGrid3DAction[] = localActions.map(action => ({
-        id: action.id,
-        label: t(action.labelKey),
-        icon: action.pending ? <Loader2 size={13} className="animate-spin" /> : ACTION_ICONS[action.id],
-        disabled: action.disabled,
-        onClick: () => runAction(action.id),
-        title: t(action.titleKey ?? action.labelKey),
-    }));
+    const actions: DesktopGrid3DAction[] = localActions
+        .filter(action => localImportSupported || action.id !== 'import-folder')
+        .map(action => ({
+            id: action.id,
+            label: t(action.labelKey),
+            icon: action.pending ? <Loader2 size={13} className="animate-spin" /> : ACTION_ICONS[action.id],
+            disabled: action.disabled,
+            onClick: () => runAction(action.id),
+            title: t(action.titleKey ?? action.labelKey),
+        }));
 
     const isEmptyLibrary = directoryTrees.loaded && localSongs.length === 0 && trees.length === 0;
 
@@ -183,14 +189,16 @@ export const LocalGrid3DView: React.FC<LocalGrid3DViewProps> = ({
             <div className="w-full h-full flex flex-col items-center justify-center gap-4 opacity-60">
                 <Music size={64} />
                 <p className="text-lg">{t('localMusic.noLocalMusic')}</p>
-                <button
-                    onClick={() => void homeActions.importFolder()}
-                    disabled={importBusy}
-                    className="px-6 py-3 rounded-full transition-colors text-sm flex items-center gap-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {importBusy ? <Loader2 size={16} className="animate-spin" /> : <FolderOpen size={16} />}
-                    {scanning ? t('options.scanning') : actionState.importingFolder ? t('localMusic.importing') : t('localMusic.importFolder')}
-                </button>
+                {localImportSupported && (
+                    <button
+                        onClick={() => void homeActions.importFolder()}
+                        disabled={importBusy}
+                        className="px-6 py-3 rounded-full transition-colors text-sm flex items-center gap-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {importBusy ? <Loader2 size={16} className="animate-spin" /> : <FolderOpen size={16} />}
+                        {scanning ? t('options.scanning') : actionState.importingFolder ? t('localMusic.importing') : t('localMusic.importFolder')}
+                    </button>
+                )}
             </div>
         );
     }
